@@ -1,0 +1,153 @@
+import math
+
+
+# Firing offsets (degrees, over a 720-degree 4-stroke cycle) by engine
+# family and layout. Pure data: the torque math below doesn't change
+# per-layout, only which offsets it uses.
+CONFIGS = {
+    "inline": {
+        "I2": (0, 360),
+        "I3": (0, 240, 480),
+        "I4": (0, 180, 360, 540),
+        "I6": (0, 120, 240, 360, 480, 600),
+    },
+    "boxer": {
+        "F4": (0, 180, 360, 540),
+        "F6": (0, 120, 240, 360, 480, 600),
+    },
+}
+
+
+class Crankshaft:
+    """Sums piston forces into net engine torque via slider-crank geometry,
+    and can integrate that torque forward in time to get crank speed.
+
+    Units: stroke and rod_length in metres, forces in N, torque in N*m,
+    inertia in kg*m^2, omega in rad/s, theta in radians.
+    """
+
+    def __init__(self, stroke, rod_length, cylinders, family, layout,
+                 inertia=0.15, start_rpm=800):
+        """
+        stroke:      piston stroke (m)
+        rod_length:  connecting rod length l (m)
+        cylinders:   list of Cylinder objects, in firing-order position
+                     (e.g. cylinder 1, 2, 3, 4) -- matched up with the
+                     offsets for `family`/`layout`
+        family:      key into CONFIGS, e.g. "inline", "boxer"
+        layout:      key into CONFIGS[family], e.g. "I4", "F4"
+        inertia:     flywheel + rotating-assembly moment of inertia (kg*m^2)
+        start_rpm:   initial crank speed for step()
+        """
+        if rod_length <= stroke / 2:
+            raise ValueError("rod_length must be greater than the crank radius")
+
+        try:
+            offsets = CONFIGS[family][layout]
+        except KeyError:
+            raise ValueError(f"Unknown configuration: {family}/{layout}")
+        if len(cylinders) != len(offsets):
+            raise ValueError(
+                f"{family}/{layout} needs {len(offsets)} cylinders, got {len(cylinders)}"
+            )
+
+        self.stroke = stroke
+        self.r = stroke / 2          # crank radius
+        self.l = rod_length          # connecting rod length
+        self.family = family
+        self.layout = layout
+        self.cylinders = list(zip(cylinders, offsets))
+
+        # Time-step state
+        self.inertia = inertia
+        self.omega = start_rpm * 2 * math.pi / 60   # rad/s
+        self.theta = 0.0                            # rad
+
+    def _leverage(self, theta_local_deg):
+        """Slider-crank leverage factor: sin(theta + beta) / cos(beta),
+        where sin(beta) = (r / l) * sin(theta) is the rod angle."""
+        theta = math.radians(theta_local_deg)
+        sin_beta = (self.r / self.l) * math.sin(theta)
+        cos_beta = math.sqrt(1.0 - sin_beta ** 2)
+        beta = math.asin(sin_beta)
+        return math.sin(theta + beta) / cos_beta
+
+    def calculate_net_torque(self, current_rpm, theta_global):
+        """Net crankshaft torque (N*m) at the given RPM and global crank
+        angle (0-720 degrees for a 4-stroke cycle)."""
+        net_torque = 0.0
+
+        for cylinder, offset in self.cylinders:
+            # 1. Local angle within this cylinder's own 720-degree cycle
+            theta_local = (theta_global - offset) % 720
+
+            # 2. Piston force: only during the power stroke, and now shaped
+            #    by where in that stroke the piston currently is
+            if 0 <= theta_local < 180:
+                f_p = cylinder.calculate_downward_force(current_rpm, theta_local)
+            else:
+                f_p = 0.0
+
+            # 3. Torque = F_p * r * leverage
+            net_torque += f_p * self.r * self._leverage(theta_local)
+
+        return net_torque
+
+    def step(self, dt, load_torque=0.0):
+        """Advance the crankshaft by dt seconds using its current speed and
+        angle, and return the net torque produced during this step.
+
+        load_torque: resistance from drag/friction/load (N*m), opposing
+        rotation.
+        """
+        rpm = self.omega * 60 / (2 * math.pi)
+        theta_global_deg = math.degrees(self.theta) % 720
+
+        t_net = self.calculate_net_torque(rpm, theta_global_deg)
+
+        alpha = (t_net - load_torque) / self.inertia   # angular acceleration
+        self.omega += alpha * dt
+        self.theta += self.omega * dt
+
+        return t_net
+
+    def run_frame(self, frame_dt, substeps, load_torque=0.0):
+        """Advance the crankshaft by one frame's worth of time, split into
+        `substeps` small step() calls so fast-changing torque isn't skipped.
+
+        Returns the net torque from the frame's final substep (useful for
+        display/telemetry); the crank's speed and angle are updated in
+        place, same as step().
+        """
+        sub_dt = frame_dt / substeps
+        t_net = 0.0
+        for _ in range(substeps):
+            t_net = self.step(sub_dt, load_torque=load_torque)
+        return t_net
+
+    @property
+    def rpm(self):
+        return self.omega * 60 / (2 * math.pi)
+
+
+if __name__ == "__main__":
+    class DummyCylinder:
+        def calculate_downward_force(self, rpm):
+            return 5000.0  # constant placeholder force (N)
+
+    crank = Crankshaft(
+        stroke=0.0929,
+        rod_length=0.1535,
+        cylinders=[DummyCylinder() for _ in range(4)],
+        family="inline",
+        layout="I4",
+        start_rpm=800,
+    )
+
+    # One 60 FPS frame, broken into small sub-steps internally so fast
+    # torque changes aren't skipped.
+    frame_dt = 1 / 60
+    sub_steps = 50
+    for frame in range(5):
+        crank.run_frame(frame_dt, sub_steps, load_torque=0.02 * crank.rpm)
+        print(f"frame {frame}: rpm = {crank.rpm:7.1f}")
