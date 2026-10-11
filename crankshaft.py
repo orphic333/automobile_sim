@@ -72,7 +72,7 @@ class Crankshaft:
         beta = math.asin(sin_beta)
         return math.sin(theta + beta) / cos_beta
 
-    def calculate_net_torque(self, current_rpm, theta_global):
+    def calculate_net_torque(self, current_rpm, theta_global, throttle=1.0):
         """Net crankshaft torque (N*m) at the given RPM and global crank
         angle (0-720 degrees for a 4-stroke cycle)."""
         net_torque = 0.0
@@ -84,7 +84,7 @@ class Crankshaft:
             # 2. Piston force: only during the power stroke, and now shaped
             #    by where in that stroke the piston currently is
             if 0 <= theta_local < 180:
-                f_p = cylinder.calculate_downward_force(current_rpm, theta_local)
+                f_p = cylinder.calculate_downward_force(current_rpm, theta_local, throttle)
             else:
                 f_p = 0.0
 
@@ -93,17 +93,19 @@ class Crankshaft:
 
         return net_torque
 
-    def step(self, dt, load_torque=0.0):
+    def step(self, dt, load_torque=0.0, throttle=1.0):
         """Advance the crankshaft by dt seconds using its current speed and
         angle, and return the net torque produced during this step.
 
         load_torque: resistance from drag/friction/load (N*m), opposing
-        rotation.
+        rotation -- independent of throttle.
+        throttle: 0-1, how open the throttle plate is; passed straight
+        through to each cylinder's force calculation.
         """
         rpm = self.omega * 60 / (2 * math.pi)
         theta_global_deg = math.degrees(self.theta) % 720
 
-        t_net = self.calculate_net_torque(rpm, theta_global_deg)
+        t_net = self.calculate_net_torque(rpm, theta_global_deg, throttle=throttle)
 
         alpha = (t_net - load_torque) / self.inertia   # angular acceleration
         self.omega += alpha * dt
@@ -111,19 +113,21 @@ class Crankshaft:
 
         return t_net
 
-    def run_frame(self, frame_dt, substeps, load_torque=0.0):
+    def run_frame(self, frame_dt, substeps, load_torque=0.0, throttle=1.0):
         """Advance the crankshaft by one frame's worth of time, split into
         `substeps` small step() calls so fast-changing torque isn't skipped.
 
-        Returns the net torque from the frame's final substep (useful for
-        display/telemetry); the crank's speed and angle are updated in
+        Returns the AVERAGE net torque across the frame's substeps (not
+        just the last one) -- torque swings sharply within a single power
+        stroke, so the last substep alone is a noisy, misleading sample
+        for display/telemetry. The crank's speed and angle are updated in
         place, same as step().
         """
         sub_dt = frame_dt / substeps
-        t_net = 0.0
+        total_t = 0.0
         for _ in range(substeps):
-            t_net = self.step(sub_dt, load_torque=load_torque)
-        return t_net
+            total_t += self.step(sub_dt, load_torque=load_torque, throttle=throttle)
+        return total_t / substeps
 
     @property
     def rpm(self):
@@ -132,8 +136,8 @@ class Crankshaft:
 
 if __name__ == "__main__":
     class DummyCylinder:
-        def calculate_downward_force(self, rpm):
-            return 5000.0  # constant placeholder force (N)
+        def calculate_downward_force(self, rpm, theta_local=0.0, throttle=1.0):
+            return 5000.0 * throttle  # constant placeholder force (N)
 
     crank = Crankshaft(
         stroke=0.0929,

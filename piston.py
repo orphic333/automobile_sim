@@ -107,13 +107,18 @@ class Cylinder:
         exponent = -((theta_local - peak_angle) ** 2) / (2 * sigma ** 2)
         return math.exp(exponent)
 
-    def calculate_downward_force(self, current_rpm, theta_local=0.0):
+    def calculate_downward_force(self, current_rpm, theta_local=0.0, throttle=1.0):
         """
         theta_local: crank angle (degrees) within this cylinder's own
         power stroke (0-180). Shapes the force to rise and fall across the
         stroke instead of staying constant.
+        throttle: 0-1, how open the throttle plate is. Physically this
+        restricts how much air reaches the cylinder, so it scales
+        volumetric efficiency directly -- a nearly-closed throttle starves
+        the engine of air/fuel and produces little force, same as a real
+        idling engine.
         """
-        ve_value = self._calculate_synthetic_volumetric_efficiency(current_rpm)
+        ve_value = self._calculate_synthetic_volumetric_efficiency(current_rpm) * throttle
         mean_effective_pressure = self._calculate_mean_effective_pressure(ve_value)
         pressure_factor = self._calculate_crank_angle_pressure_factor(theta_local)
         linear_force_vector = mean_effective_pressure * pressure_factor * self.surface_area
