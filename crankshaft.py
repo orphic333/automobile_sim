@@ -81,12 +81,11 @@ class Crankshaft:
             # 1. Local angle within this cylinder's own 720-degree cycle
             theta_local = (theta_global - offset) % 720
 
-            # 2. Piston force: only during the power stroke, and now shaped
-            #    by where in that stroke the piston currently is
-            if 0 <= theta_local < 180:
-                f_p = cylinder.calculate_downward_force(current_rpm, theta_local, throttle)
-            else:
-                f_p = 0.0
+            # 2. Piston force: the cylinder itself now decides which
+            #    strokes produce force (power stroke pushes, compression
+            #    stroke resists, intake/exhaust are still zero) and shapes
+            #    it by where in that stroke the piston currently is
+            f_p = cylinder.calculate_downward_force(current_rpm, theta_local, throttle)
 
             # 3. Torque = F_p * r * leverage
             net_torque += f_p * self.r * self._leverage(theta_local)

@@ -69,6 +69,14 @@ class Cylinder:
     AIR_FUEL_RATIO = 14.7          # stoichiometric, by mass
     LOWER_HEATING_VALUE = 44_000_000.0  # J/kg, gasoline
 
+    # Wiebe function constants: how combustion actually spreads over a span
+    # of crank rotation instead of happening all at once. BURN_DURATION_DEG
+    # is how many degrees of crank angle the burn takes; WIEBE_A/WIEBE_N
+    # shape the burn curve (these are the standard textbook defaults).
+    BURN_DURATION_DEG = 40.0
+    WIEBE_A = 5.0
+    WIEBE_N = 3.0
+
     def __init__(self, bore, stroke, rod_length=140.0, compression_ratio=10.0):
         """
         bore, stroke, rod_length: millimeters
@@ -84,6 +92,18 @@ class Cylinder:
         # Clearance volume: what's left at TDC when the full swept volume
         # has been compressed away. CR = (Vswept + Vclearance) / Vclearance.
         self.clearance_volume = self.swept_volume / (compression_ratio - 1)
+        self.volume_at_bdc = self.clearance_volume + self.swept_volume
+
+        # A fixed reference mass (kg) -- "how much a cylinder-full of air at
+        # intake conditions would weigh". This isn't the actual trapped
+        # mass (that's derated by VE/throttle); it's a constant unit-
+        # conversion anchor so pressure can be computed directly from
+        # temperature and volume via the ideal gas law, same way for both
+        # strokes below.
+        self._reference_mass = (
+            self.INTAKE_PRESSURE * self.volume_at_bdc
+            / (self.GAS_CONSTANT * self.INTAKE_TEMP)
+        )
 
     def _calculate_swept_volume(self):
         swept_volume = math.pi  * (self.bore / 2) ** 2 *  self.stroke
@@ -103,6 +123,9 @@ class Cylinder:
         Distance (m) the piston has traveled from TDC, at crank angle
         theta_local_deg (0 = TDC, 180 = BDC), via the slider-crank formula.
         r = crank radius (half the stroke), l = connecting rod length.
+        Trig functions are periodic, so this is valid for any angle, not
+        just 0-180 -- the same formula naturally covers the compression
+        stroke (180-360) too.
         """
         r = self.stroke / 2
         l = self.rod_length
@@ -113,45 +136,91 @@ class Cylinder:
         """Cylinder volume (m^3) above the piston at this crank angle."""
         return self.clearance_volume + self._piston_position(theta_local_deg) * self.surface_area
 
-    def _combustion_peak_pressure(self, current_rpm, throttle):
+    def _compression_state(self, theta_local):
         """
-        Runs the air-standard Otto cycle's compression + combustion stages
-        (processes 1->2->3) to get the pressure right after ignition, at
-        TDC. This is the starting point the power stroke then expands from.
+        Pressure (Pa) during the compression stroke (540-720 in the full
+        720-degree cycle). Pure isentropic compression -- no fuel involved
+        yet, so no RPM/throttle dependence, just geometry: P * V^gamma is
+        constant from the intake state to wherever the piston is now.
         """
-        ve = self._calculate_synthetic_volumetric_efficiency(current_rpm) * throttle
+        v_now = self._instantaneous_volume(theta_local)
+        return self.INTAKE_PRESSURE * (self.volume_at_bdc / v_now) ** self.GAMMA
+
+    def _wiebe_fraction(self, theta_since_ignition):
+        """
+        Fraction of the fuel's energy released so far, theta_since_ignition
+        degrees after ignition starts. 0 before ignition, rising smoothly
+        to 1 by the end of BURN_DURATION_DEG -- this is what actually
+        spreads combustion out over a span of crank rotation instead of
+        dumping all the heat in at a single instant.
+        """
+        if theta_since_ignition <= 0:
+            return 0.0
+        if theta_since_ignition >= self.BURN_DURATION_DEG:
+            return 1.0
+        x = theta_since_ignition / self.BURN_DURATION_DEG
+        return 1 - math.exp(-self.WIEBE_A * x ** (self.WIEBE_N + 1))
+
+    def _combustion_state(self, theta_local, current_rpm, throttle):
+        """
+        Pressure (Pa) during the power stroke (0-180). Ignition happens at
+        TDC (theta_local=0); heat is released progressively through the
+        burn window per _wiebe_fraction, with the piston already moving
+        outward as it burns -- so pressure rises to a peak somewhere after
+        TDC, not exactly at it, same as a real engine. After the burn
+        finishes, the hot gas just expands adiabatically (no more heat
+        being added), handled as isentropic expansion from the end-of-burn
+        state.
+        """
         cv = self.GAS_CONSTANT / (self.GAMMA - 1)
 
-        # 1->2: isentropic compression (intake -> TDC, before ignition)
+        # Compression stage (1->2): same geometry-only physics as the
+        # compression stroke, evaluated at TDC.
         t2 = self.INTAKE_TEMP * self.compression_ratio ** (self.GAMMA - 1)
-        p2 = self.INTAKE_PRESSURE * self.compression_ratio ** self.GAMMA
 
-        # 2->3: combustion, modeled as instantaneous heat release at
-        # constant volume (TDC). VE/throttle scale how much fuel-air
-        # charge actually got trapped, same role they played before.
+        # Total heat available this cycle, derated by how much charge
+        # actually got trapped (VE and throttle).
+        ve = self._calculate_synthetic_volumetric_efficiency(current_rpm) * throttle
         fuel_fraction = 1 / (self.AIR_FUEL_RATIO + 1)
         q_in = fuel_fraction * self.LOWER_HEATING_VALUE * ve
-        t3 = t2 + q_in / cv
-        p3 = p2 * (t3 / t2)
 
-        return p3
+        if theta_local < self.BURN_DURATION_DEG:
+            # Still burning: heat added so far raises temperature; volume
+            # is whatever the piston's kinematics say at this angle.
+            x = self._wiebe_fraction(theta_local)
+            t_now = t2 + x * q_in / cv
+            v_now = self._instantaneous_volume(theta_local)
+            v_specific = v_now / self._reference_mass
+            return self.GAS_CONSTANT * t_now / v_specific
+
+        # Burn finished: no more heat coming in, so from here it's pure
+        # isentropic expansion from the end-of-burn state.
+        t_end = t2 + q_in / cv
+        v_end = self._instantaneous_volume(self.BURN_DURATION_DEG)
+        v_specific_end = v_end / self._reference_mass
+        p_end = self.GAS_CONSTANT * t_end / v_specific_end
+
+        v_now = self._instantaneous_volume(theta_local)
+        return p_end * (v_end / v_now) ** self.GAMMA
 
     def calculate_downward_force(self, current_rpm, theta_local=0.0, throttle=1.0):
         """
         theta_local: crank angle (degrees) within this cylinder's own
-        power stroke (0-180, TDC to BDC).
+        720-degree cycle (0 = TDC at the start of the power stroke).
         throttle: 0-1, how open the throttle plate is -- restricts trapped
         charge, same as a real idling engine.
 
-        Pressure at this angle comes from the 3->4 expansion stage of the
-        Otto cycle: starting at the post-combustion pressure/volume (TDC),
-        expanding isentropically (P * V^gamma = constant) out to whatever
-        volume the piston has swept to at theta_local.
+        Returns force (N) during the power stroke (0-180, combustion then
+        expansion) and the compression stroke (540-720, the piston doing
+        work ON the gas before ignition). Zero during intake/exhaust
+        (180-540) -- those strokes still aren't modeled, a simplification
+        that's still on the books.
         """
-        p3 = self._combustion_peak_pressure(current_rpm, throttle)
-        v2 = self.clearance_volume
-        v_now = self._instantaneous_volume(theta_local)
+        if 0 <= theta_local < 180:
+            pressure = self._combustion_state(theta_local, current_rpm, throttle)
+        elif 540 <= theta_local < 720:
+            pressure = self._compression_state(theta_local)
+        else:
+            return 0.0
 
-        p_now = p3 * (v2 / v_now) ** self.GAMMA
-        linear_force_vector = p_now * self.surface_area
-        return round(linear_force_vector, 3)
+        return round(pressure * self.surface_area, 3)
