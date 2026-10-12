@@ -76,8 +76,14 @@ class Cylinder:
         """
         self.bore = bore/1000
         self.stroke = stroke/1000
+        self.rod_length = rod_length/1000
+        self.compression_ratio = compression_ratio
+
         self.swept_volume = self._calculate_swept_volume()
         self.surface_area = math.pi * (self.bore /2) ** 2
+        # Clearance volume: what's left at TDC when the full swept volume
+        # has been compressed away. CR = (Vswept + Vclearance) / Vclearance.
+        self.clearance_volume = self.swept_volume / (compression_ratio - 1)
 
     def _calculate_swept_volume(self):
         swept_volume = math.pi  * (self.bore / 2) ** 2 *  self.stroke
@@ -107,37 +113,45 @@ class Cylinder:
         """Cylinder volume (m^3) above the piston at this crank angle."""
         return self.clearance_volume + self._piston_position(theta_local_deg) * self.surface_area
 
-    @staticmethod
-    def _calculate_crank_angle_pressure_factor(theta_local, peak_angle=15.0,
-                                                sigma_rise=10.0, sigma_fall=45.0):
+    def _combustion_peak_pressure(self, current_rpm, throttle):
         """
-        Scales mean effective pressure by where the piston is within its
-        power stroke (theta_local in degrees, 0-180). Real cylinder
-        pressure spikes shortly after ignition (near top dead center) and
-        decays more slowly as the gas expands, so this uses an asymmetric
-        Gaussian: a narrow rise before `peak_angle`, a wider fall after it.
-        Returns a 0-1 factor.
+        Runs the air-standard Otto cycle's compression + combustion stages
+        (processes 1->2->3) to get the pressure right after ignition, at
+        TDC. This is the starting point the power stroke then expands from.
         """
-        if theta_local < peak_angle:
-            sigma = sigma_rise
-        else:
-            sigma = sigma_fall
-        exponent = -((theta_local - peak_angle) ** 2) / (2 * sigma ** 2)
-        return math.exp(exponent)
+        ve = self._calculate_synthetic_volumetric_efficiency(current_rpm) * throttle
+        cv = self.GAS_CONSTANT / (self.GAMMA - 1)
+
+        # 1->2: isentropic compression (intake -> TDC, before ignition)
+        t2 = self.INTAKE_TEMP * self.compression_ratio ** (self.GAMMA - 1)
+        p2 = self.INTAKE_PRESSURE * self.compression_ratio ** self.GAMMA
+
+        # 2->3: combustion, modeled as instantaneous heat release at
+        # constant volume (TDC). VE/throttle scale how much fuel-air
+        # charge actually got trapped, same role they played before.
+        fuel_fraction = 1 / (self.AIR_FUEL_RATIO + 1)
+        q_in = fuel_fraction * self.LOWER_HEATING_VALUE * ve
+        t3 = t2 + q_in / cv
+        p3 = p2 * (t3 / t2)
+
+        return p3
 
     def calculate_downward_force(self, current_rpm, theta_local=0.0, throttle=1.0):
         """
         theta_local: crank angle (degrees) within this cylinder's own
-        power stroke (0-180). Shapes the force to rise and fall across the
-        stroke instead of staying constant.
-        throttle: 0-1, how open the throttle plate is. Physically this
-        restricts how much air reaches the cylinder, so it scales
-        volumetric efficiency directly -- a nearly-closed throttle starves
-        the engine of air/fuel and produces little force, same as a real
-        idling engine.
+        power stroke (0-180, TDC to BDC).
+        throttle: 0-1, how open the throttle plate is -- restricts trapped
+        charge, same as a real idling engine.
+
+        Pressure at this angle comes from the 3->4 expansion stage of the
+        Otto cycle: starting at the post-combustion pressure/volume (TDC),
+        expanding isentropically (P * V^gamma = constant) out to whatever
+        volume the piston has swept to at theta_local.
         """
-        ve_value = self._calculate_synthetic_volumetric_efficiency(current_rpm) * throttle
-        mean_effective_pressure = self._calculate_mean_effective_pressure(ve_value)
-        pressure_factor = self._calculate_crank_angle_pressure_factor(theta_local)
-        linear_force_vector = mean_effective_pressure * pressure_factor * self.surface_area
+        p3 = self._combustion_peak_pressure(current_rpm, throttle)
+        v2 = self.clearance_volume
+        v_now = self._instantaneous_volume(theta_local)
+
+        p_now = p3 * (v2 / v_now) ** self.GAMMA
+        linear_force_vector = p_now * self.surface_area
         return round(linear_force_vector, 3)

@@ -18,7 +18,7 @@ from piston import Cylinder
 
 
 def build_crankshaft():
-    cylinders = [Cylinder(86, 86) for _ in range(4)]
+    cylinders = [Cylinder(86, 86, rod_length=145, compression_ratio=10.0) for _ in range(4)]
     return Crankshaft(
         stroke=0.086,
         rod_length=0.145,
@@ -40,8 +40,8 @@ def main():
 
     FPS = 60
     SUBSTEPS = 50
-    BASE_LOAD_COEFF = 0.02     # friction/drag, independent of throttle, scales with rpm
-    IDLE_THROTTLE = 0.40       # throttle plate not fully closed, same as a real idling engine
+    BASE_LOAD_COEFF = 0.1      # friction/drag, independent of throttle, scales with rpm
+    IDLE_THROTTLE = 0.10       # throttle plate barely cracked open, same as a real idling engine
     FULL_THROTTLE = 1.0
 
     # Exponential moving average smoothing for the on-screen numbers only.
