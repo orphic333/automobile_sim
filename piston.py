@@ -92,14 +92,20 @@ class Cylinder:
         ve = peak_ve * np.exp(exponent)
         return ve
 
-    @staticmethod
-    def _calculate_mean_effective_pressure(ve_value):
-        density_of_air = 1.225 #in kg/cubic meter
-        lower_heating_value_gasoline = 44000000 #specific energy of fuel in Joules/kg
-        thermal_efficiency = 0.35 #energy that is actually translated into movement
-        air_fuel_ratio = 14.7  #14.7:1 (by mass)
-        mean_effective_pressure = density_of_air * ve_value * lower_heating_value_gasoline * thermal_efficiency / air_fuel_ratio
-        return mean_effective_pressure
+    def _piston_position(self, theta_local_deg):
+        """
+        Distance (m) the piston has traveled from TDC, at crank angle
+        theta_local_deg (0 = TDC, 180 = BDC), via the slider-crank formula.
+        r = crank radius (half the stroke), l = connecting rod length.
+        """
+        r = self.stroke / 2
+        l = self.rod_length
+        theta = math.radians(theta_local_deg)
+        return r + l - (r * math.cos(theta) + math.sqrt(l**2 - (r * math.sin(theta))**2))
+
+    def _instantaneous_volume(self, theta_local_deg):
+        """Cylinder volume (m^3) above the piston at this crank angle."""
+        return self.clearance_volume + self._piston_position(theta_local_deg) * self.surface_area
 
     @staticmethod
     def _calculate_crank_angle_pressure_factor(theta_local, peak_angle=15.0,
