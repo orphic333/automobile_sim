@@ -61,7 +61,19 @@ import math
 import numpy as np
 
 class Cylinder:
-    def __init__(self, bore, stroke): #both in millimeters
+    # Air-standard Otto cycle constants (shared by every cylinder instance).
+    GAMMA = 1.35                   # specific heat ratio of hot combustion gas
+    GAS_CONSTANT = 287.0           # J/(kg*K), specific gas constant for air
+    INTAKE_PRESSURE = 101_325.0    # Pa, ambient/intake pressure
+    INTAKE_TEMP = 300.0            # K, intake charge temperature
+    AIR_FUEL_RATIO = 14.7          # stoichiometric, by mass
+    LOWER_HEATING_VALUE = 44_000_000.0  # J/kg, gasoline
+
+    def __init__(self, bore, stroke, rod_length=140.0, compression_ratio=10.0):
+        """
+        bore, stroke, rod_length: millimeters
+        compression_ratio: dimensionless (V_at_bdc / V_at_tdc)
+        """
         self.bore = bore/1000
         self.stroke = stroke/1000
         self.swept_volume = self._calculate_swept_volume()
