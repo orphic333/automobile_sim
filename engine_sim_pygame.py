@@ -13,20 +13,20 @@ All physics stays in crankshaft.py / piston.py.
 import sys
 import pygame
 
-from crankshaft import Crankshaft
-from piston import Cylinder
+from engine import Engine
 
+engine = Engine(
+    bore= 71,
+    stroke= 84,
+    rod_length= 151.2,
+    family= "inline",
+    layout= "I2",
+    compression_ratio= 10.5
+)
 
 def build_crankshaft():
-    cylinders = [Cylinder(86, 86, rod_length=145, compression_ratio=10.0) for _ in range(4)]
-    return Crankshaft(
-        stroke=0.086,
-        rod_length=0.145,
-        cylinders=cylinders,
-        family="inline",
-        layout="I4",
-        start_rpm=800,
-    )
+    crank = engine.crank
+    return crank
 
 
 def main():
@@ -42,7 +42,6 @@ def main():
     SUBSTEPS = 50
     BASE_LOAD_COEFF = 0.1      # friction/drag, independent of throttle, scales with rpm
     IDLE_THROTTLE = 0.34       # throttle plate barely cracked open, same as a real idling engine
-    FULL_THROTTLE = 1.0
 
     # Exponential moving average smoothing for the on-screen numbers only.
     # The physics itself still runs at full substep resolution underneath --
@@ -52,6 +51,8 @@ def main():
     smoothed_torque = 0.0
 
     running = True
+    throttle = 0.00
+    throttle_speed = 0.9
     while running:
         # --- 1. Handle input/events (checked every frame) ---
         for event in pygame.event.get():
@@ -62,13 +63,17 @@ def main():
 
         keys = pygame.key.get_pressed()
         throttling = keys[pygame.K_UP] or keys[pygame.K_w]
-        throttle = FULL_THROTTLE if throttling else IDLE_THROTTLE
 
         # --- 2. Advance physics by one frame ---
         # clock.tick() both caps the frame rate AND returns the elapsed
         # time (ms) since the previous call, in one step -- using it
         # directly avoids a stale/lagged dt reading.
         frame_dt = clock.tick(FPS) / 1000.0 or (1 / FPS)
+        if throttling:
+            throttle += throttle_speed * frame_dt  #
+        else:
+            throttle -= throttle_speed * frame_dt
+        throttle = max(IDLE_THROTTLE, min(throttle, 1.0))
         load_torque = BASE_LOAD_COEFF * crank.rpm
         net_torque = crank.run_frame(frame_dt, SUBSTEPS, load_torque=load_torque, throttle=throttle)
 
@@ -91,7 +96,6 @@ def main():
 
     pygame.quit()
     sys.exit()
-
 
 if __name__ == "__main__":
     main()
