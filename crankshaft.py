@@ -1,6 +1,5 @@
 import math
 
-
 # Firing offsets (degrees, over a 720-degree 4-stroke cycle) by engine
 # family and layout. Pure data: the torque math below doesn't change
 # per-layout, only which offsets it uses.
@@ -17,20 +16,19 @@ CONFIGS = {
     },
 }
 
-
 class Crankshaft:
     """Sums piston forces into net engine torque via slider-crank geometry,
     and can integrate that torque forward in time to get crank speed.
 
-    Units: stroke and rod_length in metres, forces in N, torque in N*m,
+    Units: stroke and rod_length in millimeters, forces in N, torque in N*m,
     inertia in kg*m^2, omega in rad/s, theta in radians.
     """
 
     def __init__(self, stroke, rod_length, cylinders, family, layout,
                  inertia=0.15, start_rpm=800):
         """
-        stroke:      piston stroke (m)
-        rod_length:  connecting rod length l (m)
+        stroke:      piston stroke (mm)
+        rod_length:  connecting rod length l (mm)
         cylinders:   list of Cylinder objects, in firing-order position
                      (e.g. cylinder 1, 2, 3, 4) -- matched up with the
                      offsets for `family`/`layout`
@@ -51,9 +49,9 @@ class Crankshaft:
                 f"{family}/{layout} needs {len(offsets)} cylinders, got {len(cylinders)}"
             )
 
-        self.stroke = stroke
-        self.r = stroke / 2          # crank radius
-        self.l = rod_length          # connecting rod length
+        self.stroke_m = stroke /1000
+        self.r_m = stroke / 2000          # crank radius
+        self.l_m = rod_length/1000          # connecting rod length
         self.family = family
         self.layout = layout
         self.cylinders = list(zip(cylinders, offsets))
@@ -61,13 +59,13 @@ class Crankshaft:
         # Time-step state
         self.inertia = inertia
         self.omega = start_rpm * 2 * math.pi / 60   # rad/s
-        self.theta = 0.0                            # rad
+        self.theta_rad = 0.0                            # rad
 
     def _leverage(self, theta_local_deg):
         """Slider-crank leverage factor: sin(theta + beta) / cos(beta),
         where sin(beta) = (r / l) * sin(theta) is the rod angle."""
         theta = math.radians(theta_local_deg)
-        sin_beta = (self.r / self.l) * math.sin(theta)
+        sin_beta = (self.r_m / self.l_m) * math.sin(theta)
         cos_beta = math.sqrt(1.0 - sin_beta ** 2)
         beta = math.asin(sin_beta)
         return math.sin(theta + beta) / cos_beta
@@ -88,7 +86,7 @@ class Crankshaft:
             f_p = cylinder.calculate_downward_force(current_rpm, theta_local, throttle)
 
             # 3. Torque = F_p * r * leverage
-            net_torque += f_p * self.r * self._leverage(theta_local)
+            net_torque += f_p * self.r_m * self._leverage(theta_local)
 
         return net_torque
 
@@ -102,13 +100,13 @@ class Crankshaft:
         through to each cylinder's force calculation.
         """
         rpm = self.omega * 60 / (2 * math.pi)
-        theta_global_deg = math.degrees(self.theta) % 720
+        theta_global_deg = math.degrees(self.theta_rad) % 720
 
         t_net = self.calculate_net_torque(rpm, theta_global_deg, throttle=throttle)
 
         alpha = (t_net - load_torque) / self.inertia   # angular acceleration
         self.omega += alpha * dt
-        self.theta += self.omega * dt
+        self.theta_rad += self.omega * dt
 
         return t_net
 
@@ -139,8 +137,8 @@ if __name__ == "__main__":
             return 5000.0 * throttle  # constant placeholder force (N)
 
     crank = Crankshaft(
-        stroke=0.0929,
-        rod_length=0.1535,
+        stroke=92.9,
+        rod_length=153.5,
         cylinders=[DummyCylinder() for _ in range(4)],
         family="inline",
         layout="I4",
@@ -153,4 +151,5 @@ if __name__ == "__main__":
     sub_steps = 50
     for frame in range(5):
         crank.run_frame(frame_dt, sub_steps, load_torque=0.02 * crank.rpm)
-        print(f"frame {frame}: rpm = {crank.rpm:7.1f}")
+        torque = crank.calculate_net_torque(crank.rpm, math.degrees(crank.theta_rad))
+        print(f"frame {frame}: rpm = {crank.rpm:7.1f}  torque = {torque:7.1f}")
