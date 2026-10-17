@@ -82,13 +82,13 @@ class Cylinder:
         bore, stroke, rod_length: millimeters
         compression_ratio: dimensionless (V_at_bdc / V_at_tdc)
         """
-        self.bore = bore/1000
-        self.stroke = stroke/1000
-        self.rod_length = rod_length/1000
+        self.bore_m = bore/1000
+        self.stroke_m = stroke/1000
+        self.rod_length_m = rod_length/1000
         self.compression_ratio = compression_ratio
 
         self.swept_volume = self._calculate_swept_volume()
-        self.surface_area = math.pi * (self.bore /2) ** 2
+        self.surface_area = math.pi * (self.bore_m /2) ** 2
         # Clearance volume: what's left at TDC when the full swept volume
         # has been compressed away. CR = (Vswept + Vclearance) / Vclearance.
         self.clearance_volume = self.swept_volume / (compression_ratio - 1)
@@ -106,7 +106,7 @@ class Cylinder:
         )
 
     def _calculate_swept_volume(self):
-        swept_volume = math.pi  * (self.bore / 2) ** 2 *  self.stroke
+        swept_volume = math.pi  * (self.bore_m / 2) ** 2 *  self.stroke_m
         return swept_volume
 
     @staticmethod
@@ -127,10 +127,10 @@ class Cylinder:
         just 0-180 -- the same formula naturally covers the compression
         stroke (180-360) too.
         """
-        r = self.stroke / 2
-        l = self.rod_length
+        r_m = self.stroke_m / 2
+        l_m = self.rod_length_m
         theta = math.radians(theta_local_deg)
-        return r + l - (r * math.cos(theta) + math.sqrt(l**2 - (r * math.sin(theta))**2))
+        return r_m + l_m - (r_m * math.cos(theta) + math.sqrt(l_m**2 - (r_m * math.sin(theta))**2))
 
     def _instantaneous_volume(self, theta_local_deg):
         """Cylinder volume (m^3) above the piston at this crank angle."""
@@ -224,3 +224,8 @@ class Cylinder:
             return 0.0
 
         return round(pressure * self.surface_area, 3)
+
+if __name__ == '__main__':
+    cylinder = Cylinder(stroke=92.9, bore=153.5)
+    for i in range(0,720,30):
+        print(cylinder.calculate_downward_force(3000, i))
