@@ -161,6 +161,29 @@ class Cylinder:
         x = theta_since_ignition / self.BURN_DURATION_DEG
         return 1 - math.exp(-self.WIEBE_A * x ** (self.WIEBE_N + 1))
 
+    def _burn_state(self, theta_local, rpm, throttle_val=1.0):
+        t2 = self.INTAKE_TEMP * self.compression_ratio ** (self.GAMMA - 1)
+        ve = self._calculate_synthetic_volumetric_efficiency(rpm) * throttle_val
+        fuel_fraction = 1 / (self.AIR_FUEL_RATIO + 1)
+        q_in = fuel_fraction * self.LOWER_HEATING_VALUE * ve
+        cv = self.GAS_CONSTANT / (self.GAMMA - 1)
+        ratio = q_in / cv
+        start = 0
+        t_now = t2
+        while start < theta_local:
+            # t2, instantaneous volume, wiebe fraction, q_in/cv
+            end = min(start + 1, theta_local)
+            x = self._wiebe_fraction(end)
+            x_prev = self._wiebe_fraction(start)
+            v_now = self._instantaneous_volume(end)
+            v_prev = self._instantaneous_volume(start)
+            t_now *= (v_prev / v_now) ** (self.GAMMA - 1)
+            energy_released = (x - x_prev) * ratio
+            t_now += energy_released
+            start = end
+        return t_now
+
+
     def _combustion_state(self, theta_local, current_rpm, throttle):
         """
         Pressure (Pa) during the power stroke (0-180). Ignition happens at
@@ -172,30 +195,15 @@ class Cylinder:
         being added), handled as isentropic expansion from the end-of-burn
         state.
         """
-        cv = self.GAS_CONSTANT / (self.GAMMA - 1)
-
-        # Compression stage (1->2): same geometry-only physics as the
-        # compression stroke, evaluated at TDC.
-        t2 = self.INTAKE_TEMP * self.compression_ratio ** (self.GAMMA - 1)
-
-        # Total heat available this cycle, derated by how much charge
-        # actually got trapped (VE and throttle).
-        ve = self._calculate_synthetic_volumetric_efficiency(current_rpm) * throttle
-        fuel_fraction = 1 / (self.AIR_FUEL_RATIO + 1)
-        q_in = fuel_fraction * self.LOWER_HEATING_VALUE * ve
 
         if theta_local < self.BURN_DURATION_DEG:
             # Still burning: heat added so far raises temperature; volume
             # is whatever the piston's kinematics say at this angle.
-            x = self._wiebe_fraction(theta_local)
-            t_now = t2 + x * q_in / cv
-            v_now = self._instantaneous_volume(theta_local)
-            v_specific = v_now / self._reference_mass
-            return self.GAS_CONSTANT * t_now / v_specific
+            return self._burn_state(theta_local, current_rpm, throttle)
 
         # Burn finished: no more heat coming in, so from here it's pure
         # isentropic expansion from the end-of-burn state.
-        t_end = t2 + q_in / cv
+        t_end = self._burn_state(self.BURN_DURATION_DEG, current_rpm, throttle)
         v_end = self._instantaneous_volume(self.BURN_DURATION_DEG)
         v_specific_end = v_end / self._reference_mass
         p_end = self.GAS_CONSTANT * t_end / v_specific_end
