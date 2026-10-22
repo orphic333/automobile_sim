@@ -40,7 +40,7 @@ def main():
 
     FPS = 60
     SUBSTEPS = 50
-    BASE_LOAD_COEFF = 0.1      # friction/drag, independent of throttle, scales with rpm
+    BASE_LOAD_COEFF = 0.02      # friction/drag, independent of throttle, scales with rpm
     IDLE_THROTTLE = 0.34       # throttle plate barely cracked open, same as a real idling engine
 
     # Exponential moving average smoothing for the on-screen numbers only.
