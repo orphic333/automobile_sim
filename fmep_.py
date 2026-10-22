@@ -75,7 +75,7 @@ def run(dt:float, substeps:int, throttle_val:float, time_in_seconds:int)-> None:
     print(f"MECHANICAL EFFICIENCY: {round(final_mechanical_efficiency * 100, 3)}%")
 
 
-run(1/60,50,0.34,5)
+run(1/60,50,0                                   ,5)
 
 
 
