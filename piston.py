@@ -199,7 +199,10 @@ class Cylinder:
         if theta_local < self.BURN_DURATION_DEG:
             # Still burning: heat added so far raises temperature; volume
             # is whatever the piston's kinematics say at this angle.
-            return self._burn_state(theta_local, current_rpm, throttle)
+            t_now = self._burn_state(theta_local, current_rpm, throttle)
+            v_now = self._instantaneous_volume(theta_local)
+            v_specific = v_now / self._reference_mass
+            return self.GAS_CONSTANT * t_now / v_specific
 
         # Burn finished: no more heat coming in, so from here it's pure
         # isentropic expansion from the end-of-burn state.
