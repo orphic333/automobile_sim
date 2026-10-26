@@ -1,5 +1,8 @@
 import math
 
+import numpy as np
+
+from piston import Cylinder
 # Firing offsets (degrees, over a 720-degree 4-stroke cycle) by engine
 # family and layout. Pure data: the torque math below doesn't change
 # per-layout, only which offsets it uses.
@@ -136,20 +139,26 @@ if __name__ == "__main__":
         def calculate_downward_force(self, rpm, theta_local=0.0, throttle=1.0):
             return 5000.0 * throttle  # constant placeholder force (N)
 
+    piston = Cylinder(stroke = 84, bore = 71, rod_length=145, compression_ratio=12.5)
+
+
     crank = Crankshaft(
-        stroke=92.9,
-        rod_length=153.5,
-        cylinders=[DummyCylinder() for _ in range(4)],
+        stroke= 84,
+        rod_length=145,
+        cylinders=[piston for _ in range(2)],
         family="inline",
-        layout="I4",
+        layout="I2",
         start_rpm=800,
     )
 
     # One 60 FPS frame, broken into small sub-steps internally so fast
     # torque changes aren't skipped.
     frame_dt = 1 / 60
-    sub_steps = 50
-    for frame in range(5):
-        crank.run_frame(frame_dt, sub_steps, load_torque=0.02 * crank.rpm)
+    sub_steps = 151
+    torque_vals = []
+    for step in range(sub_steps):
+        crank.step(frame_dt, 0.02)
         torque = crank.calculate_net_torque(crank.rpm, math.degrees(crank.theta_rad))
-        print(f"frame {frame}: rpm = {crank.rpm:7.1f}  torque = {torque:7.1f}")
+        torque_vals.append(torque)
+        print(f"STEP {step}: rpm = {crank.rpm:7.1f}  torque = {torque:7.1f}")
+    print(f"AVERAGE TORQUE: {np.mean(torque_vals):7.1f}  MAX TORQUE: {max(torque_vals):7.1f}  MIN TORQUE: {min(torque_vals):7.1f}")

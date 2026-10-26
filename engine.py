@@ -1,5 +1,7 @@
 import math
 
+import numpy as np
+
 from crankshaft import Crankshaft, CONFIGS
 from piston import Cylinder
 
@@ -53,21 +55,17 @@ class Engine:
 
 if __name__ == "__main__" :
     engine = Engine(
-        bore= 100,
-        stroke= 80,
-        rod_length= 150,
+        bore= 71,
+        stroke= 84,
+        rod_length= 145,
         family= "inline",
-        layout= "I4",
-        compression_ratio= 12,
+        layout= "I2",
+        compression_ratio= 12.5,
     )
-    print(engine.theta_deg)
-    print(engine.engine_rpm)
-    print(engine)
+    crank = engine.crank
+    torque_vals = []
+    for _ in range(0, 720):
+        torque = crank.calculate_net_torque(current_rpm=3000, theta_global=_)
+        torque_vals.append(torque)
+    print(f"AVERAGE TORQUE: {np.mean(torque_vals):7.1f}  MAX TORQUE: {max(torque_vals):7.1f}  MIN TORQUE: {min(torque_vals):7.1f}")
 
-    for offset, cylinder in zip(engine.offsets, engine.cylinders):
-        local_angle = 150 + offset
-        force = cylinder.calculate_downward_force(3000, local_angle)
-        leverage = engine.crank._leverage(local_angle)
-        torque_contribution = force * leverage * engine.crank_radius_m
-        piston_position = cylinder._piston_position(local_angle) * 1000
-        print(f"LOCAL ANGLE: {local_angle} degrees   FORCE: {force}N   LEVERAGE: {leverage}   TORQUE: {torque_contribution}Nm   POSITION: {piston_position}mm")

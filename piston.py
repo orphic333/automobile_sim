@@ -238,5 +238,5 @@ class Cylinder:
 
 if __name__ == '__main__':
     cylinder = Cylinder(stroke=92.9, bore=153.5)
-    for i in range(0,720,30):
-        print(cylinder.calculate_downward_force(3000, i))
+    for i in range(0,721):
+        print(f"{cylinder.calculate_downward_force(3000, i)}    ANGLE: {i}")
