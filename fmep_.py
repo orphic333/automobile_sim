@@ -38,27 +38,27 @@ def run(dt:float, substeps:int, throttle_val:float, time_in_seconds:int)-> None:
     D = 0.1  # kPa/ms2   scales quadratically with engine speed representing fluid aerodynamic resistance of air/oil mist
     print_step = 0
     while elapsed_time < time_in_seconds:
-        N = abs(engine.engine_rpm)
+        N = engine.engine_rpm
         pressures = [(engine.cylinder._combustion_state(i, N, throttle_val))/1000 for i in range(0, 181)]
         p_max = max(pressures)
         N_s = mean_piston_speed(N)
         f_mep = A + B * p_max + C * N_s + D * N_s ** 2
-        load_torque = calc_load_torque(f_mep) if N > 0 else 0
-        f_mep_vals.append(f_mep)
+        if N > 0:
+            load_torque = calc_load_torque(f_mep)
+        elif N < 0:
+            load_torque = calc_load_torque(-f_mep)
+        else:
+            load_torque = 0
+        f_mep_vals.append(f_mep)   # data collection step
         if elapsed_time >= time_in_seconds - 2.0:
-            pressure_sets.append(pressures)
-            max_pressure_sets.append(p_max)
-            rpms.append(N)
-        w0 = engine.crank.omega
+            pressure_sets.append(pressures)  # data collection step
+            max_pressure_sets.append(p_max)  # data collection step
+            rpms.append(N)   # data collection step
         average_torque = engine.crank.run_frame(dt, substeps, load_torque, throttle_val)
-        #net_torque = engine.crank.calculate_net_torque(N, theta_global=engine.theta_deg, throttle=throttle_val)
-        expected = w0 + (average_torque - load_torque) * dt / engine.crank.inertia
-        indicated_torque_vals.append(average_torque)
-        load_torque_vals.append(load_torque)
-        print(f"DIFF: {engine.crank.omega - expected} ")
-        print_step += dt
-        if print_step >= 1.0:
-            print_step -= 1.0
+        #   net_torque = engine.crank.calculate_net_torque(N, theta_global=engine.theta_deg, throttle=throttle_val)
+        indicated_torque_vals.append(average_torque) # data collection step
+        load_torque_vals.append(load_torque)   # data collection step
+        print(f"RPM: {N}   TIME ELAPSED: {elapsed_time}  FMEP: {f_mep}")
         elapsed_time += dt
 
     average_rpm = statistics.mean(rpms)
@@ -76,7 +76,7 @@ def run(dt:float, substeps:int, throttle_val:float, time_in_seconds:int)-> None:
     print(f"MECHANICAL EFFICIENCY: {mechanical_efficiency}")
 
 
-run(1/60,50,0,5)
+run(1/60,50,0,7)
 
 
 
