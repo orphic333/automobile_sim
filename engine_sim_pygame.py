@@ -14,6 +14,7 @@ import sys
 import pygame
 
 from engine import Engine
+from fmep_class_ import Fmep
 
 
 def build_engine(bore, stroke, rod_length, family, layout, compression_ratio):
@@ -29,18 +30,27 @@ def build_engine(bore, stroke, rod_length, family, layout, compression_ratio):
 
 
 def main():
+    #   INPUT FROM USERS COLLECTED AND VALIDATED IN A BLOCK ABOVE. INPUTS THEN PASSED TO THE build_engine() function BELOW.
+    #   LATER FEATURE.
+    car_engine = build_engine(71,
+                          84,
+                          145,
+                          "inline",
+                          "I2",
+                          12.5)
+    fmep = Fmep(car_engine)
     pygame.init()
     screen = pygame.display.set_mode((640, 240))
     pygame.display.set_caption("Engine Sim")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("consolas", 28)
 
-    crank = build_crankshaft()
+    crank = car_engine.crank
 
     FPS = 60
     SUBSTEPS = 50
-    BASE_LOAD_COEFF = 0.02      # friction/drag, independent of throttle, scales with rpm
-    IDLE_THROTTLE = 0.34       # throttle plate barely cracked open, same as a real idling engine
+    BASE_LOAD_COEFF = 0.02  # friction/drag, independent of throttle, scales with rpm
+    IDLE_THROTTLE = 0.07572509851086025  # throttle plate barely cracked open, same as a real idling engine
 
     # Exponential moving average smoothing for the on-screen numbers only.
     # The physics itself still runs at full substep resolution underneath --
@@ -73,7 +83,7 @@ def main():
         else:
             throttle -= throttle_speed * frame_dt
         throttle = max(IDLE_THROTTLE, min(throttle, 1.0))
-        load_torque = BASE_LOAD_COEFF * crank.rpm
+        load_torque = fmep.calc_load_torque(throttle=throttle,dt=frame_dt)
         net_torque = crank.run_frame(frame_dt, SUBSTEPS, load_torque=load_torque, throttle=throttle)
 
         smoothed_rpm += (crank.rpm - smoothed_rpm) * SMOOTHING
