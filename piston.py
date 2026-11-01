@@ -236,6 +236,19 @@ class Cylinder:
 
         return round(pressure * self.surface_area, 3)
 
+    def max_pressure(self, rpm, throttle):
+        """
+        Returns the maximum pressure value over the burn degree duration.
+        Returned pressure values are in kPa.
+        :param rpm: Current engine speed
+        :param throttle: Air charge
+        :return: max(pressures)
+        """
+        burn_range = round(self.BURN_DURATION_DEG)
+        pressures = [(self._combustion_state(i, rpm, throttle=throttle)) / 1000 for i in
+                     range(0, burn_range + 1)]
+        return max(pressures)
+
 if __name__ == '__main__':
     cylinder = Cylinder(stroke=92.9, bore=153.5)
     for i in range(0,721):
