@@ -15,18 +15,17 @@ import pygame
 
 from engine import Engine
 
-engine = Engine(
-    bore= 71,
-    stroke= 84,
-    rod_length= 151.2,
-    family= "inline",
-    layout= "I2",
-    compression_ratio= 10.5
-)
 
-def build_crankshaft():
-    crank = engine.crank
-    return crank
+def build_engine(bore, stroke, rod_length, family, layout, compression_ratio):
+    engine = Engine(
+        bore=bore,
+        stroke=stroke,
+        rod_length=rod_length,
+        family=family,
+        layout=layout,
+        compression_ratio=compression_ratio,
+    )
+    return engine
 
 
 def main():
