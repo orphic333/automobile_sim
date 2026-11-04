@@ -54,6 +54,9 @@ def main():
     TARGET_TIME_FOR_CORRECTION = 3
     GAIN = 1 / (TARGET_TIME_FOR_CORRECTION * S)
     THROTTLE_MIN = 0.01 * IDLE_THROTTLE
+    PISTON_SPEED_CAP = 25
+    LIMIT_FADE_WITH = 300
+    rpm_cap = (60 * PISTON_SPEED_CAP) / (2 * car_engine.stroke_m)
 
     # Exponential moving average smoothing for the on-screen numbers only.
     # The physics itself still runs at full substep resolution underneath --
@@ -92,8 +95,13 @@ def main():
         passive_throttle = IDLE_THROTTLE - req_charge
         passive_throttle = max(THROTTLE_MIN, passive_throttle)
         throttle = max(pedal, passive_throttle)
-        load_torque = fmep.calc_load_torque(throttle=throttle,dt=frame_dt)
-        net_torque = crank.run_frame(frame_dt, SUBSTEPS, load_torque=load_torque, throttle=throttle)
+        rpm = crank.rpm
+        #mps = 2 * car_engine.stroke_m * rpm / 60
+        #rpm = 60 * mps / 2 * car_engine.stroke_m
+        cap =  max(0, min((rpm_cap - rpm) / LIMIT_FADE_WITH, 1))
+        final_throttle = min(throttle, cap)
+        load_torque = fmep.calc_load_torque(throttle=final_throttle,dt=frame_dt)
+        net_torque = crank.run_frame(frame_dt, SUBSTEPS, load_torque=load_torque, throttle=final_throttle)
 
 
         smoothed_rpm += (crank.rpm - smoothed_rpm) * SMOOTHING
@@ -104,7 +112,7 @@ def main():
         rpm_text = font.render(f"RPM: {smoothed_rpm:7.1f}", True, (255, 255, 255))
         torque_text = font.render(f"Torque: {smoothed_torque:7.1f} N*m", True, (200, 200, 200))
         throttle_text = font.render(
-            f"Throttle: {throttle:.3f}", True, (160, 160, 160)
+            f"Throttle: {final_throttle:.3f}", True, (160, 160, 160)
         )
         hint_text = font.render("Hold UP/W to throttle, ESC to quit", True, (120, 120, 120))
         screen.blit(rpm_text, (20, 40))
