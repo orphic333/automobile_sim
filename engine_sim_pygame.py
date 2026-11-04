@@ -70,10 +70,8 @@ def main():
     sweep = 270
     start = 225
     max_rpm = 10000
-    frac = max(0, min(smoothed_rpm / max_rpm, 1))
-    dial_angle = math.radians(start - frac * sweep)
     length = 75
-    cx, cy = 380, 300
+    cx, cy = 380, 400
     base = 20
 
     running = True
@@ -127,6 +125,8 @@ def main():
         )
         hint_text = font.render("Hold UP/W to throttle, ESC to quit", True, (120, 120, 120))
         # Draw dial
+        frac = max(0, min(smoothed_rpm / max_rpm, 1))
+        dial_angle = math.radians(start - frac * sweep)
         tip = pygame.math.Vector2(cx + length * math.cos(dial_angle), cy - length * math.sin(dial_angle))
         back_left = pygame.math.Vector2(
             cx + (base/2) * math.cos(dial_angle + math.pi/2), cy - (base/2) * math.sin(dial_angle + math.pi/2)
@@ -135,6 +135,19 @@ def main():
             cx + (base/2) * math.cos(dial_angle - math.pi/2), cy - (base/2) * math.sin(dial_angle - math.pi/2)
         )
         triangle_points = [tip, back_left, back_right]
+
+        for k in range(0, math.ceil(max_rpm/1000) + 1):
+            fraction = k / (max_rpm/1000)
+            angle = math.radians(start - fraction * sweep)
+            start_pos = pygame.math.Vector2(cx + 90  * math.cos(angle), cy - 90  * math.sin(angle))
+            end_pos = pygame.math.Vector2(cx + 80  * math.cos(angle), cy - 80 * math.sin(angle))
+            label = pygame.math.Vector2(cx + 105 * math.cos(angle), cy - 105 * math.sin(angle))
+            pygame.draw.line(screen, 'white', start_pos, end_pos)
+            text = font.render(f"{k}", True, 'red')
+            rect = text.get_rect(center =(label.x, label.y))
+            screen.blit(text, rect)
+
+
 
         pygame.draw.polygon(screen, 'red', triangle_points, width=1)
         pygame.draw.circle(screen, 'white', (cx, cy), 3)
