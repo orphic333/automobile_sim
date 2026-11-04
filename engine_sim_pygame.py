@@ -56,7 +56,7 @@ def main():
     GAIN = 1 / (TARGET_TIME_FOR_CORRECTION * S)
     THROTTLE_MIN = 0.01 * IDLE_THROTTLE
     PISTON_SPEED_CAP = 25
-    LIMIT_FADE_WITH = 300
+    LIMIT_FADE_WIDTH = 300
     rpm_cap = (60 * PISTON_SPEED_CAP) / (2 * car_engine.stroke_m)
 
 
@@ -107,7 +107,7 @@ def main():
         rpm = crank.rpm
         #mps = 2 * car_engine.stroke_m * rpm / 60
         #rpm = 60 * mps / 2 * car_engine.stroke_m
-        cap =  max(0, min((rpm_cap - rpm) / LIMIT_FADE_WITH, 1))
+        cap =  max(0, min((rpm_cap - rpm) / LIMIT_FADE_WIDTH, 1))
         final_throttle = min(throttle, cap)
         load_torque = fmep.calc_load_torque(throttle=final_throttle,dt=frame_dt)
         net_torque = crank.run_frame(frame_dt, SUBSTEPS, load_torque=load_torque, throttle=final_throttle)
@@ -136,40 +136,22 @@ def main():
         )
         triangle_points = [tip, back_left, back_right]
 
+        dial_max = max_rpm / 1000
         for k in range(0, math.ceil(max_rpm/1000) + 1):
             fraction = k / (max_rpm /1000)
             angle = math.radians(start - fraction * sweep)
             label = pygame.math.Vector2(cx + 105 * math.cos(angle), cy - 105 * math.sin(angle))
-            limit = max_rpm/1000
             for j in range(5):
                 value = k + j/5
-                if value <= limit:
-                    if value <= (rpm_cap-LIMIT_FADE_WITH)/1000:
-                        if j == 0:
-                            fract = value / limit
-                            angle = math.radians(start - fract * sweep)
-                            start_pos = pygame.math.Vector2(cx + 90 * math.cos(angle), cy - 90 * math.sin(angle))
-                            end_pos = pygame.math.Vector2(cx + 80 * math.cos(angle), cy - 80 * math.sin(angle))
-                            pygame.draw.line(screen, 'white', start_pos, end_pos)
-                        elif j > 0:
-                            fract = value / (max_rpm/1000)
-                            angle = math.radians(start - fract * sweep)
-                            start_pos = pygame.math.Vector2(cx + 90 * math.cos(angle), cy - 90 * math.sin(angle))
-                            end_pos = pygame.math.Vector2(cx + 85 * math.cos(angle), cy - 85 * math.sin(angle))
-                            pygame.draw.line(screen, 'white', start_pos, end_pos)
-                    else:
-                        if j == 0:
-                            fract = value / (max_rpm / 1000)
-                            angle = math.radians(start - fract * sweep)
-                            start_pos = pygame.math.Vector2(cx + 90 * math.cos(angle), cy - 90 * math.sin(angle))
-                            end_pos = pygame.math.Vector2(cx + 80 * math.cos(angle), cy - 80 * math.sin(angle))
-                            pygame.draw.line(screen, 'red', start_pos, end_pos)
-                        elif j > 0:
-                            fract = value / (max_rpm/1000)
-                            angle = math.radians(start - fract * sweep)
-                            start_pos = pygame.math.Vector2(cx + 90 * math.cos(angle), cy - 90 * math.sin(angle))
-                            end_pos = pygame.math.Vector2(cx + 85 * math.cos(angle), cy - 85 * math.sin(angle))
-                            pygame.draw.line(screen, 'red', start_pos, end_pos)
+                if value > dial_max:
+                    break
+                color = 'white' if value <= (rpm_cap-LIMIT_FADE_WIDTH)/1000 else 'red'
+                end_pos_val = 80 if j == 0 else 85
+                fract = value / dial_max
+                angle = math.radians(start - fract * sweep)
+                start_pos = pygame.math.Vector2(cx + 90 * math.cos(angle), cy - 90 * math.sin(angle))
+                end_pos = pygame.math.Vector2(cx + end_pos_val * math.cos(angle), cy - end_pos_val * math.sin(angle))
+                pygame.draw.line(screen, color, start_pos, end_pos)
             text = font.render(f"{k}", True, 'blue')
             rect = text.get_rect(center =(label.x, label.y))
             screen.blit(text, rect)
