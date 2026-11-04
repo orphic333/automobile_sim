@@ -9,10 +9,11 @@ Keyboard controls:
 This file only drives the simulation loop and handles input/display.
 All physics stays in crankshaft.py / piston.py.
 """
-
+import math
 import sys
 import pygame
 
+import constants
 from engine import Engine
 from fmep_class_ import Fmep
 
@@ -40,30 +41,40 @@ def main():
                           12.5)
     fmep = Fmep(car_engine)
     pygame.init()
-    screen = pygame.display.set_mode((640, 240))
+    screen = pygame.display.set_mode((840, 640))
     pygame.display.set_caption("Engine Sim")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("consolas", 28)
 
     crank = car_engine.crank
 
-    FPS = 60
-    SUBSTEPS = 50
+    FPS = constants.FPS
+    SUBSTEPS = constants.SUBSTEPS
     IDLE_THROTTLE = 0.07572509851086025  # throttle plate barely cracked open, same as a real idling engine
     S = 2986
-    TARGET_TIME_FOR_CORRECTION = 3
+    TARGET_TIME_FOR_CORRECTION = constants.TARGET_TIME_FOR_CORRECTION
     GAIN = 1 / (TARGET_TIME_FOR_CORRECTION * S)
     THROTTLE_MIN = 0.01 * IDLE_THROTTLE
     PISTON_SPEED_CAP = 25
     LIMIT_FADE_WITH = 300
     rpm_cap = (60 * PISTON_SPEED_CAP) / (2 * car_engine.stroke_m)
 
+
     # Exponential moving average smoothing for the on-screen numbers only.
     # The physics itself still runs at full substep resolution underneath --
     # this just keeps the fast-swinging per-frame torque readable.
-    SMOOTHING = 0.15
+    SMOOTHING = constants.SMOOTHING
     smoothed_rpm = crank.rpm
+    # Dial drawing constants
     smoothed_torque = 0.0
+    sweep = 270
+    start = 225
+    max_rpm = 10000
+    frac = max(0, min(smoothed_rpm / max_rpm, 1))
+    dial_angle = math.radians(start - frac * sweep)
+    length = 75
+    cx, cy = 380, 300
+    base = 20
 
     running = True
     throttle = 0.00
@@ -115,6 +126,18 @@ def main():
             f"Throttle: {final_throttle:.3f}", True, (160, 160, 160)
         )
         hint_text = font.render("Hold UP/W to throttle, ESC to quit", True, (120, 120, 120))
+        # Draw dial
+        tip = pygame.math.Vector2(cx + length * math.cos(dial_angle), cy - length * math.sin(dial_angle))
+        back_left = pygame.math.Vector2(
+            cx + (base/2) * math.cos(dial_angle + math.pi/2), cy - (base/2) * math.sin(dial_angle + math.pi/2)
+        )
+        back_right = pygame.math.Vector2(
+            cx + (base/2) * math.cos(dial_angle - math.pi/2), cy - (base/2) * math.sin(dial_angle - math.pi/2)
+        )
+        triangle_points = [tip, back_left, back_right]
+
+        pygame.draw.polygon(screen, 'red', triangle_points, width=1)
+        pygame.draw.circle(screen, 'white', (cx, cy), 3)
         screen.blit(rpm_text, (20, 40))
         screen.blit(torque_text, (20, 80))
         screen.blit(throttle_text, (20, 120))
