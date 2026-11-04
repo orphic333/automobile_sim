@@ -12,7 +12,7 @@ class Fmep:
 
     def get_rpm(self):
         return self.engine.engine_rpm
-
+    @property
     def mean_piston_speed(self):
         p_s = (2 * self.engine.stroke_m * self.get_rpm()) / 60
         return p_s
@@ -25,7 +25,7 @@ class Fmep:
         return self.engine.cylinder.max_pressure(self.engine.engine_rpm, throttle=throttle)
 
     def calc_fmep(self, throttle):
-        N_s = self.mean_piston_speed()
+        N_s = self.mean_piston_speed
         p_max = self.get_max_pressure(throttle=throttle)
         fmep = self.A + self.B * p_max + self.C * N_s + self.D * N_s ** 2
         return fmep
@@ -54,6 +54,5 @@ if __name__ == "__main__":
             average_torque = car_engine.crank.run_frame(dt, substeps, load_torque, throttle_val)
             print(f"RPM: {car_engine.engine_rpm}    LOAD TORQUE: {load_torque:.3f}      INDICATED TORQUE: {average_torque:.3f}")
             elapsed_time += dt
-
     run(1/60, 75, 0.07572509851086025, 6)
 
