@@ -54,6 +54,14 @@ class Transmission:
         output_torque = self.engine.engine_torque * self._current_ratio
         return output_torque
 
+    def reflected_inertia(self):
+        m = self.car.mass
+        r = self.car.wheel_radius
+        denominator = (self._current_ratio * self.final_drive) ** 2
+        numerator = m * r**2
+        inertia = numerator / denominator
+        return inertia
+
 if __name__ == "__main__":
     car1_engine = Engine(
         bore= 100,
