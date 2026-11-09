@@ -27,7 +27,9 @@ class Transmission:
     def down_shift(self):
         if self.current_gear > 1:
             self.current_gear -= 1
-            return self.current_gear
+            new_crank_speed = self.engine_rpm * (self._current_ratio / self.ratios[self.current_gear])
+            new_omega = self.pass_speed(new_crank_speed)
+            return new_omega
         else:
             print(f"Already at first gear!")
             return self.current_gear
