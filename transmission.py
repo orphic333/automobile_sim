@@ -73,16 +73,28 @@ class Transmission:
         return inertia
 
 if __name__ == "__main__":
-    car1_engine = Engine(
-        bore= 100,
-        stroke= 80,
-        rod_length= 60,
-        family= "inline",
-        layout= "I2",
-        compression_ratio= 12,
-    )
-    car1_Transmission = Transmission(gear_ratios, car1_engine)
-    print(car1_engine.theta_deg)  #initialised to 0.00
-    print(car1_engine.engine_rpm)  #initialised to 800 rpm
-    print(car1_Transmission.engine_torque)
-    print(car1_Transmission.output_torque)
+    car_engine = Engine(
+        71,
+        84,
+        145,
+        "inline",
+        "I2",
+        12.5)
+
+    class FakeCar:
+        mass = 1000
+        wheel_radius = 0.3
+
+    fake_car = FakeCar()
+    transmission = Transmission(ratios=gear_ratios, engine=car_engine, car=fake_car)
+
+    print(f" 1 : {car_engine.crank.omega}")
+    print(f" 2 : {transmission.up_shift()}")
+    print(f" 3 : {transmission.up_shift()}")
+    print(f" 4 : {transmission.up_shift()}")
+    print(f" 3 : {transmission.down_shift()}")
+    print(f" 2 : {transmission.down_shift()}")
+    print(f" 1 : {transmission.down_shift()}")
+
+
+
