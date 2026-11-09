@@ -22,7 +22,12 @@ class Transmission:
             return self.current_gear
         else:
             print(f"Already at gear {len(self.ratios)}!")
-            return self.current_gear
+            return self.engine.crank.omega
+
+    def pass_speed(self, crank_speed):
+        crank = self.engine.crank
+        crank.omega = (crank_speed * 2 * math.pi) / 60
+        return crank.omega
 
     def down_shift(self):
         if self.current_gear > 1:
