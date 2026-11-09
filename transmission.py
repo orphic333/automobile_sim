@@ -1,11 +1,14 @@
+import math
+
 from engine import Engine
 
 gear_ratios = (3.62, 2.12, 1.53, 1.12, 0.91, 0.73)
 
 
 class Transmission:
-    def __init__(self, ratios:tuple, engine:Engine):
+    def __init__(self, ratios:tuple, engine, car):
         self.engine = engine
+        self.car = car
         if ratios is None:
             raise ValueError("ratios must be specified")
         self.ratios = ratios
@@ -16,7 +19,6 @@ class Transmission:
         self.final_drive = 3.92 #final drive
 
     def up_shift(self):
-
         if self.current_gear < len(self.ratios):
             self.current_gear += 1
             # new crank speed = old crank speed * (new ratio / old ratio)
@@ -40,7 +42,7 @@ class Transmission:
             return new_omega
         else:
             print(f"Already at first gear!")
-            return self.current_gear
+            return self.engine.crank.omega
 
     @property
     def engine_torque(self) -> float:
@@ -61,7 +63,7 @@ class Transmission:
 
     @property
     def output_torque(self):
-        output_torque = self.engine.engine_torque * self._current_ratio
+        output_torque = self.engine.engine_torque * self._current_ratio * self.final_drive if self._current_ratio > 0 else 0
         return output_torque
 
     def reflected_inertia(self):
