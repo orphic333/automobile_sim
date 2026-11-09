@@ -93,7 +93,7 @@ class Crankshaft:
 
         return net_torque
 
-    def step(self, dt, load_torque=0.0, throttle=1.0):
+    def step(self, dt, reflected_inertia, load_torque=0.0, throttle=1.0):
         """Advance the crankshaft by dt seconds using its current speed and
         angle, and return the net torque produced during this step.
 
@@ -107,13 +107,13 @@ class Crankshaft:
 
         t_net = self.calculate_net_torque(rpm, theta_global_deg, throttle=throttle)
 
-        alpha = (t_net - load_torque) / self.inertia   # angular acceleration
+        alpha = (t_net - load_torque) / (self.inertia + reflected_inertia)   # angular acceleration
         self.omega += alpha * dt
         self.theta_rad += self.omega * dt
 
         return t_net
 
-    def run_frame(self, frame_dt, substeps, load_torque=0.0, throttle=1.0):
+    def run_frame(self, frame_dt, reflected_inertia, substeps, load_torque=0.0, throttle=1.0):
         """Advance the crankshaft by one frame's worth of time, split into
         `substeps` small step() calls so fast-changing torque isn't skipped.
 
@@ -126,7 +126,7 @@ class Crankshaft:
         sub_dt = frame_dt / substeps
         total_t = 0.0
         for _ in range(substeps):
-            total_t += self.step(sub_dt, load_torque=load_torque, throttle=throttle)
+            total_t += self.step(sub_dt, load_torque=load_torque, throttle=throttle, reflected_inertia=reflected_inertia)
         return total_t / substeps
 
     @property
