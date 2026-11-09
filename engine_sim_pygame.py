@@ -14,31 +14,40 @@ import sys
 import pygame
 
 import constants
-from engine import Engine
 from fmep_class_ import Fmep
+from car import Car
 
-
-def build_engine(bore, stroke, rod_length, family, layout, compression_ratio):
-    engine = Engine(
+def build_car(bore,stroke,rod_length,family,layout,ratios,mass,wheel_radius,compression_ratio):
+    user_car = Car(
         bore=bore,
         stroke=stroke,
         rod_length=rod_length,
         family=family,
         layout=layout,
-        compression_ratio=compression_ratio,
+        ratios = ratios,
+        mass=mass,
+        wheel_radius=wheel_radius,
+        compression_ratio=compression_ratio
     )
-    return engine
-
+    return user_car
 
 def main():
     #   INPUT FROM USERS COLLECTED AND VALIDATED IN A BLOCK ABOVE. INPUTS THEN PASSED TO THE build_engine() function BELOW.
     #   LATER FEATURE.
-    car_engine = build_engine(71,
-                          84,
-                          145,
-                          "inline",
-                          "I2",
-                          12.5)
+    user_car = build_car(
+        71,
+        84,
+        145,
+        "inline",
+        "I2",
+        (3.62, 2.12, 1.53, 1.12, 0.91, 0.73),
+        1000,
+        0.3,
+        12.5
+    )
+
+    car_engine = user_car.engine
+    car_transmission = user_car.transmission
     fmep = Fmep(car_engine)
     pygame.init()
     screen = pygame.display.set_mode((840, 640))
@@ -110,7 +119,8 @@ def main():
         cap =  max(0, min((rpm_cap - rpm) / LIMIT_FADE_WIDTH, 1))
         final_throttle = min(throttle, cap)
         load_torque = fmep.calc_load_torque(throttle=final_throttle,dt=frame_dt)
-        net_torque = crank.run_frame(frame_dt, SUBSTEPS, load_torque=load_torque, throttle=final_throttle)
+        reflected_inertia = car_transmission.reflected_inertia()
+        net_torque = crank.run_frame(frame_dt, reflected_inertia, substeps= SUBSTEPS, load_torque=load_torque, throttle=final_throttle)
 
 
         smoothed_rpm += (crank.rpm - smoothed_rpm) * SMOOTHING
@@ -162,6 +172,7 @@ def main():
 
         pygame.draw.polygon(screen, 'blue', triangle_points, width=1)
         pygame.draw.circle(screen, 'white', (cx, cy), 3)
+        pygame.draw.circle(screen, 'white', (cx,cy), 125, width=5)
         screen.blit(rpm_text, (20, 40))
         screen.blit(torque_text, (20, 80))
         screen.blit(throttle_text, (20, 120))
