@@ -19,7 +19,10 @@ class Transmission:
 
         if self.current_gear < len(self.ratios):
             self.current_gear += 1
-            return self.current_gear
+            # new crank speed = old crank speed * (new ratio / old ratio)
+            new_crank_speed = self.engine_rpm * (self._current_ratio / self.ratios[self.current_gear - 2])
+            new_omega = self.pass_speed(new_crank_speed)
+            return new_omega
         else:
             print(f"Already at gear {len(self.ratios)}!")
             return self.engine.crank.omega
